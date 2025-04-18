@@ -39,23 +39,31 @@
             gap: 15px;
             z-index: 10;
         }
-        /* --- 修改按鈕預設和懸停顏色 --- */
-        button {
-            background-color: #718096; /* bg-gray-600 - 較亮的灰色 */
-            color: white;
-            padding: 8px 15px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #4a5568; /* bg-gray-700 - 滑鼠懸停時變深 */
-        }
-        /* --- Active 狀態顏色不變 --- */
-        button.active {
-            background-color: #3182ce; /* bg-blue-600 */
-        }
+
+
+/* 使用更具體的選擇器來提高優先級 */
+#controls button {
+    background-color: #4a5568 !important; /* 使用 !important 確保樣式被應用 */
+    color: white !important;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    /* 添加邊框以增強按鈕輪廓 */
+    border: 1px solid #718096 !important;
+}
+
+#controls button:hover {
+    background-color: #2d3748 !important; /* 懸停時使用更深的灰色 */
+    border-color: #a0aec0 !important; /* 懸停時邊框變亮 */
+}
+
+/* Active 狀態不變 */
+#controls button.active {
+    background-color: #3182ce !important; /* 保持原有的藍色 active 狀態 */
+    border-color: #4299e1 !important; /* 活動狀態邊框也變為藍色 */
+}
         #tooltip {
             position: absolute;
             background-color: rgba(0, 0, 0, 0.8);
@@ -415,17 +423,21 @@
                             zoomToPlanet(planetMeshes[targetObject.userData.name]);
                         } else {
                             showInfoBox(targetObject.userData);
-                            followingPlanet = null;
+                            followingPlanet = null; // 如果點擊的是太陽或其他非跟隨物體，取消跟隨
                         }
                     } else {
+                         // 如果點擊的是正在跟隨的行星，顯示資訊
                         showInfoBox(targetObject.userData);
                     }
                 }
             } else {
-                hideInfoBox();
-                if (followingPlanet) {
-                    followingPlanet = null;
-                }
+                // 點擊空白處
+                 hideInfoBox();
+                 if (followingPlanet) {
+                    // 如果之前在跟隨，可以選擇取消跟隨或保持跟隨
+                    // 目前行為：保持跟隨，僅隱藏信息框
+                    // 若要取消跟隨： followingPlanet = null;
+                 }
             }
         }
 
@@ -434,24 +446,27 @@
              mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
              mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
              raycaster.setFromCamera(mouse, camera);
-             const intersects = raycaster.intersectObjects(planets, true);
+             const intersects = raycaster.intersectObjects(planets, true); // `true` for recursive check
 
              if (intersects.length > 0) {
                  const firstIntersect = intersects[0].object;
+                  // 檢查父對象是否為行星，處理點擊到行星環的情況
                  const targetObject = firstIntersect.parent?.userData?.isPlanet ? firstIntersect.parent : firstIntersect;
 
-                 if (targetObject !== intersectedObject && targetObject.userData.name) {
+                 if (targetObject !== intersectedObject && targetObject.userData.name) { // 確保對象有名字
                      intersectedObject = targetObject;
                      tooltip.textContent = intersectedObject.userData.name;
                      tooltip.style.left = `${event.clientX + 10}px`;
                      tooltip.style.top = `${event.clientY + 10}px`;
                      tooltip.style.display = 'block';
                  } else if (targetObject === intersectedObject) {
+                     // 如果滑鼠仍在同一個物體上，只需更新位置
                      tooltip.style.left = `${event.clientX + 10}px`;
                      tooltip.style.top = `${event.clientY + 10}px`;
                  }
              } else {
                  if (intersectedObject) {
+                     // 滑鼠移出任何可交互物體
                      tooltip.style.display = 'none';
                  }
                  intersectedObject = null;
@@ -494,9 +509,10 @@
             if (listItem && listItem.dataset.planetName) {
                 const planetName = listItem.dataset.planetName;
                 const targetPlanet = planetMeshes[planetName];
-                if (targetPlanet && targetPlanet !== followingPlanet) {
+                 if (targetPlanet && targetPlanet !== followingPlanet) { // 確保不是點擊當前跟隨的行星
                     zoomToPlanet(targetPlanet);
                 } else if (targetPlanet === followingPlanet) {
+                     // 如果點擊的是正在跟隨的行星，只顯示資訊框
                      showInfoBox(targetPlanet.userData);
                 }
             }
@@ -507,36 +523,40 @@
             planetMesh.getWorldPosition(planetWorldPosition);
 
             const planetRadius = planetMesh.geometry.parameters.radius || 1;
-            const offsetDistance = planetRadius * 6;
-            const baseOffset = new THREE.Vector3(0, planetRadius * 1.5, offsetDistance);
+            // 計算偏移距離，確保較大的行星也能完整顯示
+            const offsetDistance = planetRadius * 6; // 基礎距離為半徑的6倍
+            const baseOffset = new THREE.Vector3(0, planetRadius * 1.5, offsetDistance); // 稍微抬高視角
 
+            // 初始偏移量需要考慮行星當前在軌道上的位置（其父容器的旋轉）
             const initialRotatedOffset = baseOffset.clone();
-             if (planetMesh.parent && planetMesh.parent.isObject3D) {
+             if (planetMesh.parent && planetMesh.parent.isObject3D) { // 行星應該有父容器（軌道容器）
                  initialRotatedOffset.applyQuaternion(planetMesh.parent.quaternion);
              }
 
             targetCameraPosition.copy(planetWorldPosition).add(initialRotatedOffset);
             targetLookAtPosition.copy(planetWorldPosition);
 
+            // 保存用於持續跟隨的基礎偏移量（相對於行星本身）
             followOffset.copy(baseOffset);
-            followingPlanet = planetMesh;
-            startCameraAnimation();
+            followingPlanet = planetMesh; // 設定正在跟隨的行星
+            startCameraAnimation(); // 開始動畫
         }
 
+
         function resetCameraView() {
-            followingPlanet = null;
-            targetCameraPosition.copy(initialCameraPosition);
-            targetLookAtPosition.copy(initialTargetPosition);
-            startCameraAnimation();
+            followingPlanet = null; // 取消跟隨
+            targetCameraPosition.copy(initialCameraPosition); // 目標設為初始位置
+            targetLookAtPosition.copy(initialTargetPosition); // 目標設為初始焦點
+            startCameraAnimation(); // 開始動畫
         }
 
         function startCameraAnimation() {
-            startCameraPositionForAnim.copy(camera.position);
-            startLookAtPositionForAnim.copy(controls.target);
+            startCameraPositionForAnim.copy(camera.position); // 記錄當前相機位置
+            startLookAtPositionForAnim.copy(controls.target); // 記錄當前視角目標
 
             isAnimatingCamera = true;
             animationElapsedTime = 0;
-            hideInfoBox();
+            hideInfoBox(); // 開始動畫時隱藏信息框
         }
 
 
@@ -544,15 +564,17 @@
             const canvas = document.createElement('canvas');
             canvas.width = 64; canvas.height = 64;
             const context = canvas.getContext('2d');
+            // Create a radial gradient for the sun's glow
             const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
-            gradient.addColorStop(0, 'rgba(255, 255, 180, 1)');
-            gradient.addColorStop(0.6, 'rgba(255, 200, 0, 1)');
-            gradient.addColorStop(1, 'rgba(255, 150, 0, 0.8)');
+            gradient.addColorStop(0, 'rgba(255, 255, 180, 1)'); // Center (bright yellow)
+            gradient.addColorStop(0.6, 'rgba(255, 200, 0, 1)'); // Middle (orange-yellow)
+            gradient.addColorStop(1, 'rgba(255, 150, 0, 0.8)'); // Edge (orange, slightly transparent)
             context.fillStyle = gradient;
             context.fillRect(0, 0, 64, 64);
+            // Add some subtle noise/texture (optional)
             context.fillStyle = 'rgba(255, 255, 255, 0.3)';
             for (let i = 0; i < 20; i++) { context.beginPath(); context.arc(Math.random() * 64, Math.random() * 64, Math.random() * 1.5, 0, 2 * Math.PI); context.fill(); }
-            context.fillStyle = 'rgba(200, 100, 0, 0.4)';
+             context.fillStyle = 'rgba(200, 100, 0, 0.4)';
             for (let i = 0; i < 15; i++) { context.beginPath(); context.arc(Math.random() * 64, Math.random() * 64, Math.random() * 2, 0, 2 * Math.PI); context.fill(); }
             const texture = new THREE.CanvasTexture(canvas);
             texture.needsUpdate = true;
@@ -572,6 +594,7 @@
                  animate();
              } catch(error) {
                  console.error("動畫啟動時發生錯誤 (Error starting animation):", error);
+                 // 提供用戶友好的錯誤信息
                  document.body.innerHTML = `<div style="color: red; padding: 20px; font-family: sans-serif;">啟動 3D 動畫時發生錯誤。請檢查瀏覽器控制台以獲取詳細資訊。<br>An error occurred while starting the 3D animation. Please check the browser console for details.</div>`;
              }
         }
