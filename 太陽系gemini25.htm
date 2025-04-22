@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>互動式太陽系 3D 模型 (調整按鈕顏色)</title>
+    <title>互動式太陽系 3D 模型 (真實自轉/公轉比例)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -40,30 +40,25 @@
             z-index: 10;
         }
 
+        /* --- 修改按鈕預設和懸停顏色 --- */
+        button {
+            background-color: #718096;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            /* background-color: #4a5568; */ /* 原本的懸停顏色 (bg-gray-700) */
+            background-color: #2d3748; /* 修改後：懸停時使用更深的灰色 (bg-gray-800) */
+        }
+        /* --- Active 狀態顏色不變 --- */
+        button.active {
+            background-color: #3182ce; /* bg-blue-600 */
+        }
 
-/* 使用更具體的選擇器來提高優先級 */
-#controls button {
-    background-color: #4a5568 !important; /* 使用 !important 確保樣式被應用 */
-    color: white !important;
-    padding: 8px 15px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: background-color 0.3s;
-    /* 添加邊框以增強按鈕輪廓 */
-    border: 1px solid #718096 !important;
-}
-
-#controls button:hover {
-    background-color: #2d3748 !important; /* 懸停時使用更深的灰色 */
-    border-color: #a0aec0 !important; /* 懸停時邊框變亮 */
-}
-
-/* Active 狀態不變 */
-#controls button.active {
-    background-color: #3182ce !important; /* 保持原有的藍色 active 狀態 */
-    border-color: #4299e1 !important; /* 活動狀態邊框也變為藍色 */
-}
         #tooltip {
             position: absolute;
             background-color: rgba(0, 0, 0, 0.8);
@@ -145,7 +140,8 @@
     <div id="infoBox">
         <h3 id="infoName" class="font-bold text-lg mb-2">行星名稱</h3>
         <p id="infoDesc">這裡是行星的相關資訊。</p>
-        <button id="closeInfoBox" class="mt-3 bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-xs">關閉</button>
+        <p id="infoTilt" class="mt-2 text-sm"></p>
+        <p id="infoOrbit" class="mt-1 text-sm"></p> <p id="infoRotation" class="mt-1 text-sm"></p> <button id="closeInfoBox" class="mt-3 bg-red-600 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-xs">關閉</button>
     </div>
 
     <div id="tooltip"></div>
@@ -165,7 +161,7 @@
     <div id="legend">
         <h3>圖例 (點擊縮放/跟隨)</h3>
         <ul id="legendList">
-            </ul>
+        </ul>
     </div>
 
     <script type="importmap">
@@ -191,7 +187,7 @@
         // --- 光照 (Lighting) ---
         const ambientLight = new THREE.AmbientLight(0x333333);
         scene.add(ambientLight);
-        const pointLight = new THREE.PointLight(0xffffff, 3, 0, 0);
+        const pointLight = new THREE.PointLight(0xffffff, 3, 0, 0); // 強度調整為 3
         scene.add(pointLight);
 
         // --- 控制器 (Controls) ---
@@ -203,28 +199,34 @@
         controls.maxDistance = 1000;
 
         // --- 行星和軌道數據 (Planet and Orbit Data) ---
-        const earthSizeScale = 1;
+        const earthSizeScale = 1; // 地球尺寸作為基準
+        // 行星相對地球的大小比例 (近似值)
         const planetSizes = {
             mercury: 0.383, venus: 0.949, earth: 1.0, mars: 0.532,
-            jupiter: 11.21, saturn: 9.45, uranus: 4.01, neptune: 3.88, pluto: 0.186
+            jupiter: 11.21, saturn: 9.45, uranus: 4.01, neptune: 3.88, pluto: 0.186 // 冥王星現在是矮行星
         };
-        const earthBaseSpeed = 0.01;
+        const earthBaseSpeed = 0.001; // 地球公轉基礎速度 (代表每年公轉多少弧度 @ speed x1)
+
+        // --- 行星數據 (包含實際週期) ---
+        // rotationPeriodDays: 恆星自轉週期 (地球日), 負數代表逆向
+        // orbitPeriodDays:   公轉週期 (地球日)
         const planetData = [
-             { name: '水星', name_en: 'Mercury', color: 0xaaaaaa, size: planetSizes.mercury * earthSizeScale, orbitRadius: 15, baseOrbitSpeed: earthBaseSpeed * 4.15, rotationSpeed: 0.01, info: '離太陽最近的行星。實際公轉週期約0.24年。' },
-             { name: '金星', name_en: 'Venus', color: 0xffe484, size: planetSizes.venus * earthSizeScale, orbitRadius: 25, baseOrbitSpeed: earthBaseSpeed * 1.63, rotationSpeed: 0.005, info: '擁有濃厚的大氣層，表面溫度極高。實際公轉週期約0.62年。' },
-             { name: '地球', name_en: 'Earth', color: 0x4d91ff, size: planetSizes.earth * earthSizeScale, orbitRadius: 35, baseOrbitSpeed: earthBaseSpeed * 1.0, rotationSpeed: 0.02, info: '目前已知唯一有生命的行星。公轉週期為1年。' },
-             { name: '火星', name_en: 'Mars', color: 0xff5733, size: planetSizes.mars * earthSizeScale, orbitRadius: 50, baseOrbitSpeed: earthBaseSpeed * 0.53, rotationSpeed: 0.018, info: '被稱為「紅色行星」，表面有鐵鏽。實際公轉週期約1.88年。' },
-             { name: '木星', name_en: 'Jupiter', color: 0xffca8a, size: planetSizes.jupiter * earthSizeScale, orbitRadius: 80, baseOrbitSpeed: earthBaseSpeed * 0.084, rotationSpeed: 0.04, info: '太陽系中最大的行星，是氣態巨行星。實際公轉週期約11.86年。' },
-             { name: '土星', name_en: 'Saturn', color: 0xf4d0a0, size: planetSizes.saturn * earthSizeScale, orbitRadius: 120, baseOrbitSpeed: earthBaseSpeed * 0.034, rotationSpeed: 0.035, info: '以其美麗的行星環而聞名。實際公轉週期約29.46年。', hasRing: true },
-             { name: '天王星', name_en: 'Uranus', color: 0xafdbf5, size: planetSizes.uranus * earthSizeScale, orbitRadius: 160, baseOrbitSpeed: earthBaseSpeed * 0.012, rotationSpeed: 0.025, info: '躺著自轉的冰巨行星。實際公轉週期約84.01年。' },
-             { name: '海王星', name_en: 'Neptune', color: 0x5b5dff, size: planetSizes.neptune * earthSizeScale, orbitRadius: 200, baseOrbitSpeed: earthBaseSpeed * 0.006, rotationSpeed: 0.023, info: '最遠的氣態巨行星，呈藍色。實際公轉週期約164.8年。' },
-             { name: '冥王星', name_en: 'Pluto', color: 0xcccccc, size: planetSizes.pluto * earthSizeScale, orbitRadius: 240, baseOrbitSpeed: earthBaseSpeed * 0.004, rotationSpeed: 0.008, info: '一顆位於柯伊伯帶的矮行星。實際公轉週期約248年。' }
+             { name: '水星', name_en: 'Mercury', color: 0xaaaaaa, size: planetSizes.mercury * earthSizeScale, orbitRadius: 15, baseOrbitSpeed: earthBaseSpeed * (365.25 / 87.97),  axialTilt: 0.03, rotationPeriodDays: 58.65,  orbitPeriodDays: 87.97,  info: '離太陽最近的行星。' },
+             { name: '金星', name_en: 'Venus',   color: 0xffe484, size: planetSizes.venus * earthSizeScale,   orbitRadius: 25, baseOrbitSpeed: earthBaseSpeed * (365.25 / 224.7), axialTilt: 177.4, rotationPeriodDays: -243.02, orbitPeriodDays: 224.7,  info: '擁有濃厚的大氣層，表面溫度極高，逆向自轉。' },
+             { name: '地球', name_en: 'Earth',   color: 0x4d91ff, size: planetSizes.earth * earthSizeScale,   orbitRadius: 35, baseOrbitSpeed: earthBaseSpeed * (365.25 / 365.25),axialTilt: 23.44, rotationPeriodDays: 0.997,   orbitPeriodDays: 365.25, info: '目前已知唯一有生命的行星，軸傾角造成四季變化。' },
+             { name: '火星', name_en: 'Mars',    color: 0xff5733, size: planetSizes.mars * earthSizeScale,    orbitRadius: 50, baseOrbitSpeed: earthBaseSpeed * (365.25 / 686.98), axialTilt: 25.19, rotationPeriodDays: 1.026,   orbitPeriodDays: 686.98, info: '被稱為「紅色行星」，表面有鐵鏽。' },
+             { name: '木星', name_en: 'Jupiter', color: 0xffca8a, size: planetSizes.jupiter * earthSizeScale, orbitRadius: 80, baseOrbitSpeed: earthBaseSpeed * (365.25 / 4332.59),axialTilt: 3.13,  rotationPeriodDays: 0.414,   orbitPeriodDays: 4332.59,info: '太陽系中最大的行星，是氣態巨行星。' },
+             { name: '土星', name_en: 'Saturn',  color: 0xf4d0a0, size: planetSizes.saturn * earthSizeScale,  orbitRadius: 120, baseOrbitSpeed: earthBaseSpeed * (365.25 / 10759.22), axialTilt: 26.73, rotationPeriodDays: 0.444,   orbitPeriodDays: 10759.22, info: '以其美麗的行星環而聞名。', hasRing: true },
+             { name: '天王星', name_en: 'Uranus', color: 0xafdbf5, size: planetSizes.uranus * earthSizeScale,  orbitRadius: 160, baseOrbitSpeed: earthBaseSpeed * (365.25 / 30688.5),  axialTilt: 97.77, rotationPeriodDays: 0.718,   orbitPeriodDays: 30688.5, info: '躺著自轉的冰巨行星。' }, // Rotation period often given as -0.718 due to pole def, but magnitude is key here. Tilt handles orientation.
+             { name: '海王星', name_en: 'Neptune', color: 0x5b5dff, size: planetSizes.neptune * earthSizeScale, orbitRadius: 200, baseOrbitSpeed: earthBaseSpeed * (365.25 / 60182),   axialTilt: 28.32, rotationPeriodDays: 0.671,   orbitPeriodDays: 60182,   info: '最遠的氣態巨行星，呈藍色。' },
+             { name: '冥王星', name_en: 'Pluto',  color: 0xcccccc, size: planetSizes.pluto * earthSizeScale,   orbitRadius: 240, baseOrbitSpeed: earthBaseSpeed * (365.25 / 90560),   axialTilt: 119.6, rotationPeriodDays: -6.387,  orbitPeriodDays: 90560,   info: '一顆位於柯伊伯帶的矮行星，逆向自轉。' } // 矮行星
         ];
 
         const planets = [];
         const orbitPaths = [];
         const planetOrbitContainers = [];
         const planetMeshes = {};
+        const axisHelpers = []; // Array to hold axis helpers
 
         // --- 創建太陽 (Create Sun) ---
         const sunGeometry = new THREE.SphereGeometry(5, 32, 32);
@@ -232,7 +234,7 @@
         const sun = new THREE.Mesh(sunGeometry, sunMaterial);
         sun.userData = { name: '太陽', name_en: 'Sun', info: '太陽系的中心恆星。' };
         scene.add(sun);
-        planets.push(sun);
+        planets.push(sun); // Add sun to the interactable objects list
         planetMeshes['太陽'] = sun;
 
         // --- 創建行星和軌道 (Create Planets and Orbits) ---
@@ -245,21 +247,48 @@
             const geometry = new THREE.SphereGeometry(data.size, 32, 32);
             const material = new THREE.MeshLambertMaterial({ color: data.color });
             const planet = new THREE.Mesh(geometry, material);
-            planet.position.x = data.orbitRadius;
-            planet.userData = { ...data, isPlanet: true };
-            planetMeshes[data.name] = planet;
+            planet.position.x = data.orbitRadius; // Position relative to orbit container
 
+            // Apply Axial Tilt
+            const tiltRadians = THREE.MathUtils.degToRad(data.axialTilt || 0);
+            planet.rotation.z = tiltRadians; // Set tilt first
+
+            // Add Axis Helper
+            const axisLength = data.size * 2.5;
+            const axisGeometry = new THREE.CylinderGeometry(0.02 * data.size, 0.02 * data.size, axisLength, 6);
+            const axisMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.4
+            });
+            const axisHelper = new THREE.Mesh(axisGeometry, axisMaterial);
+            // No rotation needed for axisHelper itself, it aligns with planet's local Y before tilt
+            planet.add(axisHelper); // Add helper as child *after* tilt is potentially set (though cylinder default is Y aligned)
+            axisHelper.userData.isAxisHelper = true;
+            axisHelpers.push(axisHelper);
+
+
+            planet.userData = { ...data, isPlanet: true }; // Store data in userData
+            planetMeshes[data.name] = planet; // Map name to mesh for easy access
+
+            // Add ring for Saturn
             if (data.hasRing) {
                 const ringGeometry = new THREE.RingGeometry(data.size * 1.2, data.size * 1.8, 32);
                 const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, side: THREE.DoubleSide, opacity: 0.6, transparent: true });
                 const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+                // Ring should tilt with the planet's axial tilt.
+                // Since the planet itself is tilted via rotation.z, and the ring is added as a child,
+                // we just need to rotate the ring locally to be perpendicular to the planet's spin axis (local Y).
+                // So rotate it 90 degrees around the local X axis.
                 ring.rotation.x = Math.PI / 2;
                 planet.add(ring);
+                ring.userData.isRing = true;
             }
 
             orbitContainer.add(planet);
             planets.push(planet);
 
+            // Create orbit path
             const orbitGeometry = new THREE.BufferGeometry();
             const points = [];
             const segments = 128;
@@ -274,14 +303,15 @@
             scene.add(orbit);
             orbitPaths.push(orbit);
 
-            const li = document.createElement('li');
-            li.dataset.planetName = data.name;
-            const colorBox = document.createElement('span');
-            colorBox.className = 'color-box';
-            colorBox.style.backgroundColor = `#${data.color.toString(16).padStart(6, '0')}`;
-            li.appendChild(colorBox);
-            li.appendChild(document.createTextNode(data.name));
-            legendUl.appendChild(li);
+             // Add to legend
+             const li = document.createElement('li');
+             li.dataset.planetName = data.name;
+             const colorBox = document.createElement('span');
+             colorBox.className = 'color-box';
+             colorBox.style.backgroundColor = `#${data.color.toString(16).padStart(6, '0')}`;
+             li.appendChild(colorBox);
+             li.appendChild(document.createTextNode(data.name));
+             legendUl.appendChild(li);
         });
 
         // --- 初始相機位置 (Initial Camera Position) ---
@@ -301,18 +331,24 @@
         let isAnimatingCamera = false;
         let targetCameraPosition = new THREE.Vector3();
         let targetLookAtPosition = new THREE.Vector3();
-        const animationDuration = 1.0;
+        const animationDuration = 1.0; // seconds
         let animationElapsedTime = 0;
         let startCameraPositionForAnim = new THREE.Vector3();
         let startLookAtPositionForAnim = new THREE.Vector3();
         let followingPlanet = null;
-        let followOffset = new THREE.Vector3();
+        let followOffset = new THREE.Vector3(); // Offset relative to the planet's center
 
         // --- DOM 元素引用 (DOM Element References) ---
         const speedSlider = document.getElementById('speedSlider');
         const speedValueSpan = document.getElementById('speedValue');
         const tooltip = document.getElementById('tooltip');
         const resetButton = document.getElementById('resetViewButton');
+        const infoBox = document.getElementById('infoBox');
+        const infoName = document.getElementById('infoName');
+        const infoDesc = document.getElementById('infoDesc');
+        const infoTilt = document.getElementById('infoTilt');
+        const infoOrbit = document.getElementById('infoOrbit');       // Get reference
+        const infoRotation = document.getElementById('infoRotation'); // Get reference
 
         // --- 事件監聽器 (Event Listeners) ---
         window.addEventListener('resize', onWindowResize, false);
@@ -335,63 +371,91 @@
         const clock = new THREE.Clock();
         function animate() {
             requestAnimationFrame(animate);
-            const delta = clock.getDelta();
+            const delta = clock.getDelta(); // Time elapsed since last frame (seconds)
 
             // --- 行星動畫 (Planet Animation) ---
-            planetOrbitContainers.forEach((container, index) => {
-                const planet = container.children[0];
-                const data = planet.userData;
+            planetOrbitContainers.forEach((container) => {
+                const planet = container.children[0]; // Assumes planet is the first child
+                if (!planet || !planet.userData || !planet.userData.isPlanet) return; // Skip if not a planet
 
-                if (!isRevolutionPaused && data.isPlanet) {
-                    const revolutionAmount = data.baseOrbitSpeed * simulationSpeedMultiplier * delta * 100;
+                const data = planet.userData;
+                let revolutionAmount = 0; // Initialize revolution amount for this frame
+                let rotationAmount = 0; // Initialize rotation amount for this frame
+
+                // Revolution (Orbit around Sun)
+                if (!isRevolutionPaused) {
+                    // Calculate the angle change for revolution based on base speed, multiplier, time delta, and a scaling factor for visibility
+                    revolutionAmount = data.baseOrbitSpeed * simulationSpeedMultiplier * delta * 50; // 50 is an arbitrary scaling factor for visual speed
                     container.rotation.y += revolutionAmount;
                 }
-                if (!isRotationPaused && data.isPlanet) {
-                    const rotationAmount = data.rotationSpeed * delta * 50;
-                    planet.rotation.y += rotationAmount;
+
+                // Rotation (Spin on axis) - MODIFIED LOGIC
+                if (!isRotationPaused) {
+                    // Check if we have the necessary data and non-zero rotation period
+                    if (data.orbitPeriodDays && data.rotationPeriodDays && data.rotationPeriodDays !== 0 && revolutionAmount !== 0) {
+                         // Calculate the real ratio of rotations per orbit
+                        const realRatio = data.orbitPeriodDays / data.rotationPeriodDays;
+                        // Calculate rotation amount based on the revolution amount and the real ratio
+                        // This ensures the number of rotations per orbit remains constant and true to life, regardless of simulationSpeedMultiplier
+                        rotationAmount = revolutionAmount * realRatio;
+                        planet.rotation.y += rotationAmount; // Apply rotation around the planet's local Y-axis (which is tilted)
+                    } else if (data.rotationPeriodDays === 0) {
+                         // Handle non-rotating case if needed (e.g., tide-locked moon, though not present here)
+                         planet.rotation.y = 0; // Or some initial orientation
+                    } else if (revolutionAmount === 0 && data.rotationPeriodDays) {
+                         // If revolution is paused but rotation isn't, we might want it to still rotate based on its period?
+                         // This requires a different calculation based on absolute time if desired.
+                         // For simplicity now, if revolution stops, linked rotation also stops calculation based on revolutionAmount.
+                         // To make it rotate independently when revolution is paused:
+                         // const baseRotationRate = (2 * Math.PI / data.rotationPeriodDays) * (earthBaseSpeed * 365.25); // Needs careful scaling factor derivation
+                         // rotationAmount = baseRotationRate * simulationSpeedMultiplier * delta * 50; // Maybe apply multiplier here too? Or not? Decide consistency.
+                         // For now: keep it simple, rotationAmount stays 0 if revolutionAmount is 0.
+                    }
                 }
             });
 
             // --- 攝影機與控制器更新 (Camera and Controls Update) ---
-            if (isAnimatingCamera) {
-                // --- 狀態 1: 正在進行縮放/重設動畫 ---
-                controls.enabled = false;
-                animationElapsedTime += delta;
-                const progress = Math.min(animationElapsedTime / animationDuration, 1);
-                const easeProgress = 0.5 * (1 - Math.cos(Math.PI * progress));
+              if (isAnimatingCamera) {
+                    // --- State 1: Zooming/Resetting Animation ---
+                    controls.enabled = false; // Disable controls during animation
+                    animationElapsedTime += delta;
+                    const progress = Math.min(animationElapsedTime / animationDuration, 1);
+                    const easeProgress = progress * (2 - progress); // Simple ease-out
 
-                camera.position.lerpVectors(startCameraPositionForAnim, targetCameraPosition, easeProgress);
-                controls.target.lerpVectors(startLookAtPositionForAnim, targetLookAtPosition, easeProgress);
+                    camera.position.lerpVectors(startCameraPositionForAnim, targetCameraPosition, easeProgress);
+                    controls.target.lerpVectors(startLookAtPositionForAnim, targetLookAtPosition, easeProgress);
 
-                if (progress >= 1) {
-                    isAnimatingCamera = false;
-                    camera.position.copy(targetCameraPosition);
-                    controls.target.copy(targetLookAtPosition);
-                }
-                camera.lookAt(controls.target);
+                    if (progress >= 1) {
+                        isAnimatingCamera = false;
+                        camera.position.copy(targetCameraPosition); // Ensure exact final position
+                        controls.target.copy(targetLookAtPosition); // Ensure exact final target
+                    }
+                    camera.lookAt(controls.target); // Keep looking at the interpolated target
 
-            } else if (followingPlanet) {
-                // --- 狀態 2: 正在跟隨行星 ---
-                controls.enabled = false;
-                const planetWorldPosition = new THREE.Vector3();
-                followingPlanet.getWorldPosition(planetWorldPosition);
+              } else if (followingPlanet) {
+                    // --- State 2: Following a Planet ---
+                    controls.enabled = false; // Disable manual controls when following
+                    const planetWorldPosition = new THREE.Vector3();
+                    followingPlanet.getWorldPosition(planetWorldPosition); // Get current world position
 
-                const rotatedOffset = followOffset.clone();
-                if (followingPlanet.parent && followingPlanet.parent.isObject3D) {
-                    rotatedOffset.applyQuaternion(followingPlanet.parent.quaternion);
-                }
+                    const rotatedOffset = followOffset.clone();
+                     if (followingPlanet.parent && followingPlanet.parent.isObject3D) { // Planet is child of orbit container
+                         rotatedOffset.applyQuaternion(followingPlanet.parent.quaternion);
+                     }
 
-                const targetCamPos = planetWorldPosition.clone().add(rotatedOffset);
+                    const targetCamPos = planetWorldPosition.clone().add(rotatedOffset);
 
-                camera.position.lerp(targetCamPos, 0.1);
-                controls.target.copy(planetWorldPosition);
-                camera.lookAt(controls.target);
+                    // Smoothly move camera towards the target position
+                    camera.position.lerp(targetCamPos, 0.1); // Adjust lerp factor for smoothness
+                    // Keep looking at the planet's center
+                    controls.target.copy(planetWorldPosition);
+                    camera.lookAt(controls.target);
 
-            } else {
-                // --- 狀態 3: 自由控制 ---
-                controls.enabled = true;
-                controls.update();
-            }
+              } else {
+                    // --- State 3: Free Orbit Controls ---
+                    controls.enabled = true;
+                    controls.update(); // Only update controls if not animating or following
+              }
 
             // 渲染場景
             renderer.render(scene, camera);
@@ -405,39 +469,74 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
+        function getInteractableObject(object) {
+             if (!object) return null;
+             if (object.userData?.isPlanet || object.userData?.name === '太陽') {
+                 return object;
+             }
+             // Check parents, but avoid infinite loops or going too high
+             let parent = object.parent;
+             let depth = 0;
+             const maxDepth = 5; // Limit search depth
+             while (parent && depth < maxDepth) {
+                 if (parent.userData?.isPlanet || parent.userData?.name === '太陽') {
+                     return parent;
+                 }
+                 // Stop if we hit the scene or an orbit container (don't want to select the container itself)
+                 if (parent === scene || planetOrbitContainers.includes(parent)) {
+                     break;
+                 }
+                 parent = parent.parent;
+                 depth++;
+             }
+             return null;
+        }
+
+
         function onCanvasClick(event) {
             if (isAnimatingCamera) return;
 
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
             raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(planets, true);
+            const intersects = raycaster.intersectObjects(scene.children, true); // Check recursively
 
             if (intersects.length > 0) {
-                const clickedObject = intersects[0].object;
-                const targetObject = clickedObject.parent?.userData?.isPlanet ? clickedObject.parent : clickedObject;
+                 // Find the closest interactable object (planet or sun)
+                 let clickedObject = null;
+                 for (const intersect of intersects) {
+                     // Ignore clicks on orbits, axis helpers, rings directly
+                     if (intersect.object.userData.isOrbit || intersect.object.userData.isAxisHelper || intersect.object.userData.isRing) {
+                         continue;
+                     }
+                     clickedObject = getInteractableObject(intersect.object);
+                     if (clickedObject) break; // Found the planet/sun mesh or its parent container's mesh
+                 }
 
-                if (targetObject.userData.name) {
-                    if (targetObject !== followingPlanet) {
-                        if (planetMeshes[targetObject.userData.name] && targetObject.userData.isPlanet) {
-                            zoomToPlanet(planetMeshes[targetObject.userData.name]);
-                        } else {
-                            showInfoBox(targetObject.userData);
-                            followingPlanet = null; // 如果點擊的是太陽或其他非跟隨物體，取消跟隨
-                        }
-                    } else {
-                         // 如果點擊的是正在跟隨的行星，顯示資訊
-                        showInfoBox(targetObject.userData);
-                    }
+
+                if (clickedObject && clickedObject.userData.name) {
+                     if (clickedObject !== followingPlanet && clickedObject.userData.isPlanet) { // Can follow planets, not sun
+                         zoomToPlanet(clickedObject);
+                         showInfoBox(clickedObject.userData); // Show info on zoom
+                     } else { // Clicked on followed planet or the sun
+                         showInfoBox(clickedObject.userData);
+                         if (clickedObject === sun) { // Clicking sun stops following
+                             followingPlanet = null; // Stop following if sun is clicked
+                         }
+                     }
+                } else {
+                     // Clicked on empty space or non-interactable object
+                     hideInfoBox();
+                     // Optionally, stop following if background is clicked
+                     // followingPlanet = null;
+                     // resetCameraView(); // Or just stop following without resetting view immediately
                 }
             } else {
-                // 點擊空白處
-                 hideInfoBox();
-                 if (followingPlanet) {
-                    // 如果之前在跟隨，可以選擇取消跟隨或保持跟隨
-                    // 目前行為：保持跟隨，僅隱藏信息框
-                    // 若要取消跟隨： followingPlanet = null;
-                 }
+                // Clicked on empty space
+                hideInfoBox();
+                // Optionally, stop following if background is clicked
+                // followingPlanet = null;
+                // resetCameraView();
             }
         }
 
@@ -446,27 +545,34 @@
              mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
              mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
              raycaster.setFromCamera(mouse, camera);
-             const intersects = raycaster.intersectObjects(planets, true); // `true` for recursive check
+             const intersects = raycaster.intersectObjects(scene.children, true); // Recursive check
 
-             if (intersects.length > 0) {
-                 const firstIntersect = intersects[0].object;
-                  // 檢查父對象是否為行星，處理點擊到行星環的情況
-                 const targetObject = firstIntersect.parent?.userData?.isPlanet ? firstIntersect.parent : firstIntersect;
+             let currentTargetObject = null;
+              if (intersects.length > 0) {
+                 // Find the first object that represents a planet or sun
+                  for (const intersect of intersects) {
+                      // Ignore orbits, axes, rings for tooltip trigger
+                      if (intersect.object.userData.isOrbit || intersect.object.userData.isAxisHelper || intersect.object.userData.isRing) {
+                          continue;
+                      }
+                      currentTargetObject = getInteractableObject(intersect.object);
+                      if (currentTargetObject) break;
+                  }
+             }
 
-                 if (targetObject !== intersectedObject && targetObject.userData.name) { // 確保對象有名字
-                     intersectedObject = targetObject;
+             if (currentTargetObject && currentTargetObject.userData.name) {
+                 if (currentTargetObject !== intersectedObject) {
+                     intersectedObject = currentTargetObject;
                      tooltip.textContent = intersectedObject.userData.name;
                      tooltip.style.left = `${event.clientX + 10}px`;
                      tooltip.style.top = `${event.clientY + 10}px`;
                      tooltip.style.display = 'block';
-                 } else if (targetObject === intersectedObject) {
-                     // 如果滑鼠仍在同一個物體上，只需更新位置
+                 } else { // Still hovering over the same object, update position
                      tooltip.style.left = `${event.clientX + 10}px`;
                      tooltip.style.top = `${event.clientY + 10}px`;
                  }
-             } else {
-                 if (intersectedObject) {
-                     // 滑鼠移出任何可交互物體
+             } else { // Not hovering over an interactable object
+                 if (intersectedObject) { // If we were previously hovering
                      tooltip.style.display = 'none';
                  }
                  intersectedObject = null;
@@ -474,13 +580,42 @@
         }
 
         function showInfoBox(data) {
-            document.getElementById('infoName').textContent = data.name;
-            document.getElementById('infoDesc').textContent = data.info || `關於 ${data.name} 的資訊。`;
-            document.getElementById('infoBox').style.display = 'block';
+            infoName.textContent = data.name;
+            infoDesc.textContent = data.info || `關於 ${data.name} 的資訊。`;
+
+            // Display Axial Tilt
+            if (data.axialTilt !== undefined) {
+                infoTilt.textContent = `軸傾角: ${data.axialTilt.toFixed(2)} 度`;
+                infoTilt.style.display = 'block';
+            } else {
+                infoTilt.style.display = 'none';
+            }
+
+            // Display Orbit Period
+            if (data.orbitPeriodDays !== undefined) {
+                infoOrbit.textContent = `公轉週期: ${data.orbitPeriodDays.toFixed(2)} 地球日`;
+                infoOrbit.style.display = 'block';
+            } else {
+                infoOrbit.style.display = 'none';
+            }
+
+            // Display Rotation Period
+            if (data.rotationPeriodDays !== undefined) {
+                const rotationText = (data.rotationPeriodDays < 0) ?
+                     `自轉週期: ${(-data.rotationPeriodDays).toFixed(2)} 地球日 (逆行)` :
+                     `自轉週期: ${data.rotationPeriodDays.toFixed(2)} 地球日`;
+                infoRotation.textContent = rotationText;
+                infoRotation.style.display = 'block';
+            } else {
+                infoRotation.style.display = 'none';
+            }
+
+            infoBox.style.display = 'block';
         }
 
+
         function hideInfoBox() {
-            document.getElementById('infoBox').style.display = 'none';
+            infoBox.style.display = 'none';
         }
 
         function toggleOrbits() {
@@ -499,6 +634,7 @@
             document.getElementById('toggleRevolution').classList.toggle('active', !isRevolutionPaused);
         }
 
+
         function onSpeedChange(event) {
             simulationSpeedMultiplier = parseFloat(event.target.value);
             speedValueSpan.textContent = `x${simulationSpeedMultiplier.toFixed(1)}`;
@@ -509,54 +645,57 @@
             if (listItem && listItem.dataset.planetName) {
                 const planetName = listItem.dataset.planetName;
                 const targetPlanet = planetMeshes[planetName];
-                 if (targetPlanet && targetPlanet !== followingPlanet) { // 確保不是點擊當前跟隨的行星
-                    zoomToPlanet(targetPlanet);
-                } else if (targetPlanet === followingPlanet) {
-                     // 如果點擊的是正在跟隨的行星，只顯示資訊框
-                     showInfoBox(targetPlanet.userData);
-                }
+                 if (targetPlanet && targetPlanet !== followingPlanet) {
+                     zoomToPlanet(targetPlanet);
+                     showInfoBox(targetPlanet.userData); // Show info on zoom
+                 } else if (targetPlanet === followingPlanet) { // Clicked on already followed planet
+                     showInfoBox(targetPlanet.userData); // Just show info again
+                 }
             }
         }
 
         function zoomToPlanet(planetMesh) {
+            if (!planetMesh || !planetMesh.userData.isPlanet) return; // Only zoom to planets
+
             const planetWorldPosition = new THREE.Vector3();
             planetMesh.getWorldPosition(planetWorldPosition);
 
             const planetRadius = planetMesh.geometry.parameters.radius || 1;
-            // 計算偏移距離，確保較大的行星也能完整顯示
-            const offsetDistance = planetRadius * 6; // 基礎距離為半徑的6倍
-            const baseOffset = new THREE.Vector3(0, planetRadius * 1.5, offsetDistance); // 稍微抬高視角
+            // Adjust offset based on planet size - further away for larger planets
+            const offsetDistance = planetRadius * 5 + 5; // Base distance + scale with radius
+            const baseOffset = new THREE.Vector3(0, planetRadius * 1.5, offsetDistance); // Look slightly from above
 
-            // 初始偏移量需要考慮行星當前在軌道上的位置（其父容器的旋轉）
-            const initialRotatedOffset = baseOffset.clone();
-             if (planetMesh.parent && planetMesh.parent.isObject3D) { // 行星應該有父容器（軌道容器）
-                 initialRotatedOffset.applyQuaternion(planetMesh.parent.quaternion);
-             }
+            // Calculate target camera position relative to the planet's current position
+            // The offset should ideally rotate with the orbit container for a stable view from "behind" the planet
+            const targetOffset = baseOffset.clone();
+            // Apply the orbit container's rotation to the offset vector
+            if (planetMesh.parent && planetMesh.parent.isObject3D) { // parent should be the orbit container
+                 targetOffset.applyQuaternion(planetMesh.parent.quaternion);
+            }
 
-            targetCameraPosition.copy(planetWorldPosition).add(initialRotatedOffset);
-            targetLookAtPosition.copy(planetWorldPosition);
+            targetCameraPosition.copy(planetWorldPosition).add(targetOffset); // Target position in world space
+            targetLookAtPosition.copy(planetWorldPosition); // Look at the planet's center
 
-            // 保存用於持續跟隨的基礎偏移量（相對於行星本身）
+            // Store the *local* offset for the following state
             followOffset.copy(baseOffset);
-            followingPlanet = planetMesh; // 設定正在跟隨的行星
-            startCameraAnimation(); // 開始動畫
+            followingPlanet = planetMesh;
+            startCameraAnimation();
         }
 
 
         function resetCameraView() {
-            followingPlanet = null; // 取消跟隨
-            targetCameraPosition.copy(initialCameraPosition); // 目標設為初始位置
-            targetLookAtPosition.copy(initialTargetPosition); // 目標設為初始焦點
-            startCameraAnimation(); // 開始動畫
+            followingPlanet = null; // Stop following
+            targetCameraPosition.copy(initialCameraPosition);
+            targetLookAtPosition.copy(initialTargetPosition);
+            startCameraAnimation();
         }
 
         function startCameraAnimation() {
-            startCameraPositionForAnim.copy(camera.position); // 記錄當前相機位置
-            startLookAtPositionForAnim.copy(controls.target); // 記錄當前視角目標
-
+            startCameraPositionForAnim.copy(camera.position);
+            startLookAtPositionForAnim.copy(controls.target);
             isAnimatingCamera = true;
             animationElapsedTime = 0;
-            hideInfoBox(); // 開始動畫時隱藏信息框
+            hideInfoBox(); // Hide info box during camera transition
         }
 
 
@@ -564,18 +703,20 @@
             const canvas = document.createElement('canvas');
             canvas.width = 64; canvas.height = 64;
             const context = canvas.getContext('2d');
-            // Create a radial gradient for the sun's glow
             const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
-            gradient.addColorStop(0, 'rgba(255, 255, 180, 1)'); // Center (bright yellow)
-            gradient.addColorStop(0.6, 'rgba(255, 200, 0, 1)'); // Middle (orange-yellow)
-            gradient.addColorStop(1, 'rgba(255, 150, 0, 0.8)'); // Edge (orange, slightly transparent)
+            gradient.addColorStop(0, 'rgba(255, 255, 200, 1)'); // Core bright yellow/white
+            gradient.addColorStop(0.5, 'rgba(255, 200, 0, 1)'); // Middle orange/yellow
+            gradient.addColorStop(1, 'rgba(255, 150, 0, 0.8)'); // Outer orange, slightly transparent edge
             context.fillStyle = gradient;
             context.fillRect(0, 0, 64, 64);
-            // Add some subtle noise/texture (optional)
-            context.fillStyle = 'rgba(255, 255, 255, 0.3)';
-            for (let i = 0; i < 20; i++) { context.beginPath(); context.arc(Math.random() * 64, Math.random() * 64, Math.random() * 1.5, 0, 2 * Math.PI); context.fill(); }
-             context.fillStyle = 'rgba(200, 100, 0, 0.4)';
-            for (let i = 0; i < 15; i++) { context.beginPath(); context.arc(Math.random() * 64, Math.random() * 64, Math.random() * 2, 0, 2 * Math.PI); context.fill(); }
+
+            // Add some subtle noise/texture variation (optional)
+            context.fillStyle = 'rgba(255, 255, 255, 0.2)'; // Brighter spots
+            for (let i = 0; i < 15; i++) { context.beginPath(); context.arc(Math.random() * 64, Math.random() * 64, Math.random() * 1.2, 0, 2 * Math.PI); context.fill(); }
+             context.fillStyle = 'rgba(200, 100, 0, 0.3)'; // Darker spots/granulation
+            for (let i = 0; i < 10; i++) { context.beginPath(); context.arc(Math.random() * 64, Math.random() * 64, Math.random() * 1.8, 0, 2 * Math.PI); context.fill(); }
+
+
             const texture = new THREE.CanvasTexture(canvas);
             texture.needsUpdate = true;
             return texture;
@@ -594,10 +735,9 @@
                  animate();
              } catch(error) {
                  console.error("動畫啟動時發生錯誤 (Error starting animation):", error);
-                 // 提供用戶友好的錯誤信息
                  document.body.innerHTML = `<div style="color: red; padding: 20px; font-family: sans-serif;">啟動 3D 動畫時發生錯誤。請檢查瀏覽器控制台以獲取詳細資訊。<br>An error occurred while starting the 3D animation. Please check the browser console for details.</div>`;
              }
-        }
+         }
 
     </script>
 </body>
